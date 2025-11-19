@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora de Diárias e Extras</title>
+    <!-- Configurações PWA/Mobile para uma experiência de aplicativo -->
+    <meta name="theme-color" content="#3b82f6">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+
+    <!-- Incluindo Tailwind CSS para um design moderno e responsivo -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Estilos personalizados para a aplicação */
+        :root {
+            --primary-color: #3b82f6; /* Blue 500 */
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* Gray 100 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 16px;
+        }
+        .card {
+            background-color: white;
+            padding: 32px;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            max-width: 520px;
+            width: 100%;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+            color: #1f2937; /* Gray 800 */
+        }
+        .input-group input[type="time"],
+        .input-group input[type="number"],
+        .input-group input[type="text"],
+        .input-group select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #d1d5db; /* Gray 300 */
+            border-radius: 6px;
+            transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+        }
+        .input-group input:focus, .input-group select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5); /* Blue 500 with alpha */
+            outline: none;
+        }
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-weight: 600;
+            transition: background-color 0.2s;
+        }
+        .btn-primary:hover {
+            background-color: #2563eb; /* Blue 600 */
+        }
+        /* Estilo do Modal */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            max-width: 450px;
+            width: 90%;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+        .recibo-item {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px dashed #e5e7eb;
+            padding: 4px 0;
+        }
+    </style>
+    <script>
+        // Configuração do Tailwind JIT (opcional, mas recomendado)
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <div class="card">
+        <h1 class="text-3xl font-bold mb-4 text-gray-800">Pagamento & Recibo de Horas Extras</h1>
+        <p class="text-sm text-gray-500 mb-6">Preencha os dados da jornada e os valores para o cálculo.</p>
+
+        <!-- Seção de Dados do Funcionário e Valores -->
+        <div id="employee-data" class="mb-6 space-y-4">
+            <h2 class="text-xl font-semibold text-gray-700">1. Dados e Valores</h2>
+            
+            <div class="input-group">
+                <label for="employeeName">Nome do Funcionário:</label>
+                <input type="text" id="employeeName" required placeholder="Ex: João da Silva">
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div class="input-group">
+                    <label for="dailyRate">Diária (R$):</label>
+                    <input type="number" id="dailyRate" required value="100.00" min="0" step="0.01">
+                </div>
+                <div class="input-group">
+                    <label for="standardHours">Jornada Padrão (h):</label>
+                    <input type="number" id="standardHours" required value="8" min="1" step="0.5">
+                </div>
+            </div>
+            <div class="input-group">
+                <label for="overtimeMultiplier">Multiplicador HE (Ex: 1.0 para Sem Adicional):</label>
+                <input type="number" id="overtimeMultiplier" required value="1.0" min="1" step="0.01">
+            </div>
+        </div>
+
+        <hr class="mb-6">
+
+        <!-- Seção de Cálculo de Tempo -->
+        <h2 class="text-xl font-semibold mb-4 text-gray-700">2. Registro de Ponto</h2>
+        <form id="overtime-form" class="space-y-4">
+            <!-- Hora de Início e Fim -->
+            <div class="grid grid-cols-2 gap-4">
+                <div class="input-group">
+                    <label for="startTime">Hora de Início:</label>
+                    <input type="time" id="startTime" required value="08:00">
+                </div>
+                <div class="input-group">
+                    <label for="endTime">Hora de Fim:</label>
+                    <input type="time" id="endTime" required value="17:00">
+                </div>
+            </div>
+
+            <!-- Intervalo (Minutos) -->
+            <div class="input-group">
+                <label for="breakMinutes">Duração do Intervalo (em minutos):</label>
+                <input type="number" id="breakMinutes" required value="60" min="0">
+                <p class="text-xs text-gray-400 mt-1">Ex: 60 minutos para 1h de almoço.</p>
+            </div>
+
+            <!-- Botão de Cálculo -->
+            <button type="submit" id="calculate-btn" class="w-full btn-primary transition duration-200 shadow-md hover:shadow-lg mt-6">
+                Calcular Pagamento
+            </button>
+        </form>
+
+        <!-- Seção de Resultados -->
+        <div id="results" class="mt-8 pt-6 border-t border-gray-200 hidden">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700">3. Resultado e Pagamento</h2>
+
+            <!-- Cartão PRINCIPAL: TOTAL A PAGAR -->
+            <div id="totalPayCard" class="bg-green-100 border-l-4 border-green-500 p-5 rounded-lg shadow-xl mb-4">
+                <p class="font-medium text-green-700 text-lg">TOTAL GERAL A PAGAR:</p>
+                <p id="totalFinalPay" class="text-4xl font-extrabold text-green-800 mt-1">R$ 0,00</p>
+                <p id="paymentDetails" class="text-sm text-green-600 mt-2">(R$ Diária + R$ Horas Extras)</p>
+            </div>
+
+            <!-- Cartão Detalhado de Horas Extras -->
+            <div id="overtimeTimeCard" class="bg-red-50 border-l-4 border-red-400 p-4 rounded-lg shadow-sm mb-4">
+                <p class="font-medium text-red-700">Horas Extras em Tempo:</p>
+                <p id="overtimeTime" class="text-2xl font-extrabold text-red-900 mt-1">--</p>
+            </div>
+            
+            <div id="noOvertimeMessage" class="hidden bg-green-50 border-l-4 border-green-400 p-4 rounded-lg shadow-sm">
+                <p class="text-green-700 font-bold">Jornada padrão. Nenhuma hora extra a ser paga.</p>
+            </div>
+
+            <!-- Botão Gerar Recibo -->
+             <button id="generate-receipt-btn" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg transition duration-200 mt-4">
+                Gerar Recibo Digital
+            </button>
+        </div>
+    </div>
+    
+    <!-- Modal de Recibo -->
+    <div id="receipt-modal" class="modal hidden">
+        <div class="modal-content">
+            <h2 class="text-2xl font-bold mb-4 text-gray-800 text-center">Recibo de Pagamento</h2>
+            <div class="border-2 border-gray-300 p-4 rounded-lg space-y-3">
+                <p class="text-sm text-gray-600 text-center mb-4" id="receipt-date">Data: 01/01/2025</p>
+                <p class="font-semibold text-center mb-4">Pagamento para: <span id="receipt-employee-name" class="text-blue-700">--</span></p>
+
+                <div class="recibo-item">
+                    <span>Diária Base (Jornada de <span id="receipt-standard-hours">--</span>h):</span>
+                    <span class="font-semibold" id="receipt-daily-rate">--</span>
+                </div>
+                <div class="recibo-item">
+                    <span>Hora Normal (R$):</span>
+                    <span class="font-semibold" id="receipt-hourly-rate">--</span>
+                </div>
+                <div class="recibo-item">
+                    <span>Tempo Total Trabalhado (Líquido):</span>
+                    <span class="font-semibold" id="receipt-worked-time">--</span>
+                </div>
+
+                <div class="pt-2 border-t border-gray-400">
+                    <div class="recibo-item font-semibold text-red-700" id="receipt-overtime-time-row">
+                        <span>Horas Extras Trabalhadas:</span>
+                        <span id="receipt-overtime-time">--</span>
+                    </div>
+                    <div class="recibo-item font-semibold text-red-700" id="receipt-overtime-pay-row">
+                        <span>Valor das Horas Extras (x<span id="receipt-multiplier">--</span>):</span>
+                        <span id="receipt-overtime-pay">--</span>
+                    </div>
+                </div>
+
+                <div class="recibo-item pt-4 text-2xl font-extrabold text-green-700 border-t-2 border-green-500">
+                    <span>TOTAL GERAL A PAGAR:</span>
+                    <span id="receipt-total-pay">R$ 0,00</span>
+                </div>
+            </div>
+
+            <div class="mt-6 space-y-3">
+                <button id="print-receipt-btn" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white py-2 px-4 rounded-lg transition duration-200">
+                    Imprimir Recibo
+                </button>
+                <button id="copy-receipt-btn" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 px-4 rounded-lg transition duration-200">
+                    Copiar Recibo para Área de Transferência
+                </button>
+                <button id="close-receipt-btn" class="w-full bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition duration-200">
+                    Fechar
+                </button>
+            </div>
+            <p id="copy-message" class="text-sm text-center text-green-600 mt-3 hidden">Recibo copiado!</p>
+        </div>
+    </div>
+
+    <script>
+        // --- Funções de Utilitário ---
+        
+        // Formata minutos em HHh MMm
+        function minutesToHhMm(totalMinutes) {
+            const sign = totalMinutes < 0 ? "-" : "";
+            const absMinutes = Math.abs(totalMinutes);
+            const hours = Math.floor(absMinutes / 60);
+            const minutes = absMinutes % 60;
+            return `${sign}${String(hours).padStart(2, '0')}h ${String(minutes).padStart(2, '0')}m`;
+        }
+
+        // Converte HH:MM para minutos
+        function timeToMinutes(timeStr) {
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            return (hours * 60) + minutes;
+        }
+
+        // Formatação de Moeda
+        const currencyFormat = new Intl.NumberFormat('pt-BR', {
+            style: 'currency',
+            currency: 'BRL',
+        });
+        
+        let currentCalculation = null; // Armazena o último cálculo para gerar o recibo
+
+        // --- Lógica de Cálculo Principal ---
+
+        function calculateOvertime(event) {
+            event.preventDefault();
+            
+            // 1. Coleta de Dados (TODOS vindos do formulário)
+            const employeeName = document.getElementById('employeeName').value.trim() || "Funcionário";
+            const startTime = document.getElementById('startTime').value;
+            const endTime = document.getElementById('endTime').value;
+            const breakMinutes = parseFloat(document.getElementById('breakMinutes').value) || 0;
+            const dailyRate = parseFloat(document.getElementById('dailyRate').value) || 0;
+            const standardHours = parseFloat(document.getElementById('standardHours').value) || 8;
+            const overtimeMultiplier = parseFloat(document.getElementById('overtimeMultiplier').value) || 1.0; // Padrão ajustado para 1.0
+            
+            // 2. Cálculo do Tempo (Minutos)
+            let startMinutes = timeToMinutes(startTime);
+            let endMinutes = timeToMinutes(endTime);
+
+            // Ajusta se a jornada virou o dia
+            if (endMinutes < startMinutes) {
+                endMinutes += 24 * 60;
+            }
+
+            const totalShiftMinutes = endMinutes - startMinutes;
+            const netWorkedMinutes = totalShiftMinutes - breakMinutes;
+            const standardMinutes = standardHours * 60;
+            const overtimeMinutes = netWorkedMinutes - standardMinutes;
+            const overtimeHoursDecimal = overtimeMinutes / 60; 
+            
+            // 3. Cálculos Financeiros
+            // Cálculo da taxa horária para jornada padrão
+            const hourlyRateValue = standardHours > 0 ? dailyRate / standardHours : 0;
+            const overtimeHourlyRate = hourlyRateValue * overtimeMultiplier;
+            let overtimePayValue = 0;
+            
+            if (overtimeHoursDecimal > 0) {
+                // Se houver horas extras
+                overtimePayValue = overtimeHoursDecimal * overtimeHourlyRate;
+            } else if (overtimeHoursDecimal < 0) {
+                // Se houver débito (horas a menos), calcula com a taxa normal
+                overtimePayValue = overtimeHoursDecimal * hourlyRateValue;
+            }
+
+            // O valor final é a diária base + o valor das horas extras (se positivo)
+            const totalFinalPayValue = dailyRate + (overtimePayValue > 0 ? overtimePayValue : 0);
+
+            // Armazena o cálculo para o recibo
+            currentCalculation = {
+                employeeName: employeeName,
+                startTime, endTime, breakMinutes,
+                dailyRate, standardHours, overtimeMultiplier,
+                netWorkedMinutes, overtimeMinutes,
+                hourlyRateValue, overtimePayValue, totalFinalPayValue
+            };
+
+            // 4. Formatação e Atualização da UI
+            const resultsDiv = document.getElementById('results');
+            const totalFinalPayEl = document.getElementById('totalFinalPay');
+            const paymentDetailsEl = document.getElementById('paymentDetails');
+            const overtimeTimeCard = document.getElementById('overtimeTimeCard');
+            const overtimeTimeEl = document.getElementById('overtimeTime');
+            const noOvertimeMessage = document.getElementById('noOvertimeMessage');
+
+            resultsDiv.classList.remove('hidden');
+            totalFinalPayEl.textContent = currencyFormat.format(totalFinalPayValue);
+            
+            if (overtimeMinutes > 0) {
+                // Pagamento de Horas Extras
+                overtimeTimeCard.classList.remove('hidden');
+                noOvertimeMessage.classList.add('hidden');
+                overtimeTimeEl.textContent = minutesToHhMm(overtimeMinutes);
+                paymentDetailsEl.textContent = `(${currencyFormat.format(dailyRate)} Diária + ${currencyFormat.format(overtimePayValue)} Horas Extras)`;
+                
+                // Estilo para Horas Extras Positivas
+                document.getElementById('totalPayCard').classList.remove('bg-yellow-100', 'border-yellow-500');
+                document.getElementById('totalPayCard').classList.add('bg-green-100', 'border-green-500');
+
+            } else if (overtimeMinutes < 0) {
+                // Débito (Horas a Menos)
+                overtimeTimeCard.classList.remove('hidden');
+                noOvertimeMessage.classList.add('hidden');
+                overtimeTimeEl.textContent = `DÉBITO: ${minutesToHhMm(overtimeMinutes)}`;
+                
+                // Estilo para Débito
+                document.getElementById('totalPayCard').classList.remove('bg-green-100', 'border-green-500');
+                document.getElementById('totalPayCard').classList.add('bg-yellow-100', 'border-yellow-500');
+
+                // O total final é apenas a diária, pois o débito é um desconto potencial no valor normal.
+                totalFinalPayEl.textContent = currencyFormat.format(dailyRate + overtimePayValue); // Usa o valor negativo de overtimePayValue aqui
+                paymentDetailsEl.textContent = `(${currencyFormat.format(dailyRate)} Diária - ${currencyFormat.format(Math.abs(overtimePayValue))} Horas Não Trabalhadas)`;
+
+            } else {
+                // Jornada Padrão (Sem Extras)
+                overtimeTimeCard.classList.add('hidden');
+                noOvertimeMessage.classList.remove('hidden');
+                
+                document.getElementById('totalPayCard').classList.remove('bg-yellow-100', 'border-yellow-500');
+                document.getElementById('totalPayCard').classList.add('bg-green-100', 'border-green-500');
+                
+                totalFinalPayEl.textContent = currencyFormat.format(dailyRate);
+                paymentDetailsEl.textContent = `Valor exato da Diária.`;
+            }
+        }
+        
+        // --- Lógica de Recibo (Modal) ---
+        
+        function generateReceipt() {
+            if (!currentCalculation) {
+                // Usa mensagem de erro elegante em vez de alert
+                const msg = document.getElementById('copy-message');
+                msg.textContent = "Erro: Calcule a jornada primeiro!";
+                msg.classList.remove('hidden', 'text-green-600');
+                msg.classList.add('text-red-600');
+                setTimeout(() => msg.classList.add('hidden'), 3000);
+                return;
+            }
+            const calc = currentCalculation;
+            const modal = document.getElementById('receipt-modal');
+
+            // Preenche os dados do recibo
+            document.getElementById('receipt-employee-name').textContent = calc.employeeName;
+            document.getElementById('receipt-date').textContent = `Data: ${new Date().toLocaleDateString('pt-BR')}`;
+            document.getElementById('receipt-standard-hours').textContent = calc.standardHours.toFixed(1);
+            document.getElementById('receipt-daily-rate').textContent = currencyFormat.format(calc.dailyRate);
+            document.getElementById('receipt-hourly-rate').textContent = currencyFormat.format(calc.hourlyRateValue);
+            document.getElementById('receipt-worked-time').textContent = minutesToHhMm(calc.netWorkedMinutes);
+            document.getElementById('receipt-total-pay').textContent = currencyFormat.format(calc.totalFinalPayValue);
+            
+            // Lógica de exibição de Horas Extras/Débito
+            const overtimeTimeRow = document.getElementById('receipt-overtime-time-row');
+            const overtimePayRow = document.getElementById('receipt-overtime-pay-row');
+            
+            if (calc.overtimeMinutes > 0) {
+                // Horas Extras (Pagar)
+                overtimeTimeRow.style.display = 'flex';
+                overtimePayRow.style.display = 'flex';
+                document.getElementById('receipt-overtime-time').textContent = minutesToHhMm(calc.overtimeMinutes);
+                document.getElementById('receipt-multiplier').textContent = calc.overtimeMultiplier.toFixed(2);
+                document.getElementById('receipt-overtime-pay').textContent = currencyFormat.format(calc.overtimePayValue);
+                overtimeTimeRow.classList.replace('text-yellow-700', 'text-red-700');
+                overtimePayRow.classList.replace('text-yellow-700', 'text-red-700');
+
+            } else if (calc.overtimeMinutes < 0) {
+                // Débito (Não Trabalhado)
+                overtimeTimeRow.style.display = 'flex';
+                overtimePayRow.style.display = 'flex';
+                document.getElementById('receipt-overtime-time').textContent = `DÉBITO: ${minutesToHhMm(calc.overtimeMinutes)}`;
+                document.getElementById('receipt-multiplier').textContent = '1.00 (Tarifa Base)';
+                document.getElementById('receipt-overtime-pay').textContent = currencyFormat.format(calc.overtimePayValue);
+                overtimeTimeRow.classList.replace('text-red-700', 'text-yellow-700');
+                overtimePayRow.classList.replace('text-red-700', 'text-yellow-700');
+
+            } else {
+                 // Sem Extras
+                overtimeTimeRow.style.display = 'none';
+                overtimePayRow.style.display = 'none';
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        // Função para formatar o texto do recibo para cópia
+        function formatReceiptText(calc) {
+            let text = `--- RECIBO DE PAGAMENTO ---\n`;
+            text += `Data: ${new Date().toLocaleDateString('pt-BR')}\n`;
+            text += `Funcionário: ${calc.employeeName}\n\n`;
+            
+            text += `Detalhes da Jornada:\n`;
+            text += `  Início: ${calc.startTime} | Fim: ${calc.endTime} | Intervalo: ${calc.breakMinutes} min\n`;
+            text += `  Jornada Padrão: ${calc.standardHours.toFixed(1)}h\n`;
+            text += `  Total Trabalhado Líquido: ${minutesToHhMm(calc.netWorkedMinutes)}\n\n`;
+            
+            text += `Valores:\n`;
+            text += `  Diária Base: ${currencyFormat.format(calc.dailyRate)}\n`;
+            text += `  Hora Normal (R$): ${currencyFormat.format(calc.hourlyRateValue)}\n`;
+            
+            if (calc.overtimeMinutes > 0) {
+                text += `  Horas Extras (${minutesToHhMm(calc.overtimeMinutes)} @ x${calc.overtimeMultiplier.toFixed(2)}): ${currencyFormat.format(calc.overtimePayValue)}\n`;
+            } else if (calc.overtimeMinutes < 0) {
+                 text += `  Débito / Horas Não Trabalhadas: ${currencyFormat.format(calc.overtimePayValue)} (${minutesToHhMm(calc.overtimeMinutes)})\n`;
+            }
+            
+            text += `\n----------------------------------\n`;
+            text += `TOTAL GERAL A PAGAR: ${currencyFormat.format(calc.totalFinalPayValue)}\n`;
+            text += `----------------------------------\n`;
+            return text;
+        }
+
+        function copyReceipt() {
+            if (!currentCalculation) return;
+
+            const receiptText = formatReceiptText(currentCalculation);
+            
+            // Usando o método execCommand para compatibilidade em iframes
+            const textarea = document.createElement('textarea');
+            textarea.value = receiptText;
+            document.body.appendChild(textarea);
+            textarea.select();
+            
+            try {
+                document.execCommand('copy');
+                const msg = document.getElementById('copy-message');
+                msg.textContent = "Recibo copiado!";
+                msg.classList.remove('hidden', 'text-red-600');
+                msg.classList.add('text-green-600');
+                setTimeout(() => msg.classList.add('hidden'), 3000);
+            } catch (err) {
+                console.error('Falha ao copiar texto:', err);
+                const msg = document.getElementById('copy-message');
+                msg.textContent = "Erro ao copiar. Tente selecionar manualmente.";
+                msg.classList.remove('hidden', 'text-green-600');
+                msg.classList.add('text-red-600');
+                setTimeout(() => msg.classList.add('hidden'), 5000);
+            }
+            document.body.removeChild(textarea);
+        }
+
+        function printReceipt() {
+            // Esconde a interface principal e mostra apenas o recibo para impressão
+            if (!currentCalculation) return;
+            const receiptContent = document.getElementById('receipt-modal').querySelector('.modal-content').innerHTML;
+
+            const printWindow = window.open('', '', 'height=600,width=800');
+            printWindow.document.write('<html><head><title>Recibo</title>');
+            printWindow.document.write('<style>body{font-family: Arial, sans-serif; padding: 20px;} .recibo-item{display: flex; justify-content: space-between; border-bottom: 1px dashed #ccc; padding: 5px 0;} .text-2xl{font-size: 1.5em;} .font-extrabold{font-weight: bold;} .text-green-700{color: #047857;} </style>');
+            printWindow.document.write('</head><body>');
+            printWindow.document.write(receiptContent);
+            printWindow.document.write('</body></html>');
+            printWindow.document.close();
+
+            // Adiciona um pequeno atraso para garantir que o conteúdo seja carregado
+            setTimeout(() => {
+                printWindow.print();
+                printWindow.close();
+            }, 250);
+        }
+
+
+        // --- Event Listeners ---
+        
+        document.getElementById('overtime-form').addEventListener('submit', calculateOvertime);
+        
+        document.getElementById('generate-receipt-btn').addEventListener('click', generateReceipt);
+        document.getElementById('close-receipt-btn').addEventListener('click', () => {
+            document.getElementById('receipt-modal').classList.add('hidden');
+        });
+        
+        document.getElementById('copy-receipt-btn').addEventListener('click', copyReceipt);
+        document.getElementById('print-receipt-btn').addEventListener('click', printReceipt);
+
+        // Inicializa o cálculo ao carregar a página
+        document.addEventListener('DOMContentLoaded', () => {
+            // Executa o cálculo inicial com os valores padrão
+            document.getElementById('overtime-form').dispatchEvent(new Event('submit'));
+        });
+
+    </script>
+</body>
+</html>
